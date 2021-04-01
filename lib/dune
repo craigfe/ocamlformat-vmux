@@ -1,0 +1,5 @@
+(library
+ (name ocamlformat_vmux)
+ (public_name ocamlformat-vmux)
+ (libraries logs fmt opam-state bos rresult fpath re astring logs.fmt fmt.tty
+   sexplib dune-private-libs.xdg))

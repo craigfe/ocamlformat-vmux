@@ -1,0 +1,11 @@
+(executable
+ (name ocamlformat_vmux)
+ (modules ocamlformat_vmux)
+ (public_name ocamlformat-vmux)
+ (libraries ocamlformat_vmux))
+
+(executable
+ (name ocamlformat_vmux_shim)
+ (modules ocamlformat_vmux_shim)
+ (public_name ocamlformat-vmux-shim)
+ (libraries ocamlformat_vmux))
