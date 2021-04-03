@@ -34,9 +34,11 @@ let get_opam_installed_versions () =
               String.Map.add version entry m)
         ocamlformat_versions String.Map.empty)
 
+let versioned_ocamlformat = Printf.sprintf "ocamlformat-%s"
+
 let steal ~into =
   let install_location ~version =
-    Printf.sprintf "%s/ocamlformat-%s" into version
+    Printf.sprintf "%s/%s" into (versioned_ocamlformat version)
   in
 
   Logs.app (fun f ->
@@ -59,8 +61,7 @@ let steal ~into =
       | `Exited 0 ->
           print "  %s  %t  %s" target (constf Fmt.(styled `Faint) "↦") source
       | n ->
-          Fmt.failwith "Non-zero return status for `cp`: %a"
-            Bos.OS.Cmd.pp_status n);
+          Fmt.failwith "Non-zero return status for `cp`: %a" OS.Cmd.pp_status n);
 
   print "";
   Logs.app (fun f -> f "Writing this state to `%a`" cyan Config.location);
@@ -74,7 +75,7 @@ let steal ~into =
 let read_version_from_ocamlformat_config =
   let re = Re.Pcre.re " *version *= *(.*) *$" |> Re.compile in
   fun file ->
-    let ic = open_in file in
+    let ic = open_in (Fpath.to_string file) in
     try
       let rec aux () =
         let line = input_line ic in
@@ -87,66 +88,36 @@ let read_version_from_ocamlformat_config =
       close_in ic;
       None
 
-let find_local_config =
-  let project_root_witnesses = [ ".git"; ".hg"; "dune-project" ] in
-  let ( / ) = Filename.concat in
-  let rec scan_upwards curr =
-    let here = curr / ".ocamlformat" in
-    match Sys.file_exists here with
-    | true -> Some here
-    | false -> (
-        match
-          List.exists project_root_witnesses ~f:(fun x ->
-              Sys.file_exists (curr / x))
-        with
-        | true -> None
-        | false -> scan_upwards (Filename.dirname curr))
-  in
-  fun path -> scan_upwards path
-
-(* Taken from OCamlformat's [lib/Conf.ml]. *)
-let find_global_config () =
-  let xdg_config_home =
-    match Sys.getenv_opt "XDG_CONFIG_HOME" with
-    | None | Some "" -> (
-        match Sys.getenv_opt "HOME" with
-        | None | Some "" -> None
-        | Some home -> Some Fpath.(v home / ".config"))
-    | Some xdg_config_home -> Some (Fpath.v xdg_config_home)
-  in
-  match xdg_config_home with
-  | Some xdg_config_home ->
-      let filename = Fpath.(xdg_config_home / "ocamlformat") in
-      if Fpath.exists filename then Some filename else None
-  | None -> None
-
 let get_required_version path =
   let config =
-    match find_local_config path with
+    match Find_ocamlformat_config.local ~from:path with
     | Some x -> Some x
-    | None -> Option.map Fpath.to_string (find_global_config ())
+    | None -> Find_ocamlformat_config.global ()
   in
   Option.bind config (fun file ->
-      Option.map
-        (fun x -> (x, file))
-        (read_version_from_ocamlformat_config file))
+      read_version_from_ocamlformat_config file
+      |> Option.map (fun x -> (x, file)))
 
-let inferred_version path =
+let inferred_version ~from:path =
   match get_required_version path with
   | None ->
       Fmt.pr "None\t%t@."
         (constf
            Fmt.(styled `Faint)
-           "(no local `.ocamlformat` file for %s or in $XDG_CONFIG_HOME)" path)
+           "(no local `.ocamlformat` file for %a or in $XDG_CONFIG_HOME)"
+           Fpath.pp path)
   | Some (v, p) ->
-      Fmt.pr "Some %S\t%t@." v (constf Fmt.(styled `Faint) "(from: `%s`)" p)
+      Fmt.pr "Some %S\t%t@." v
+        (constf Fmt.(styled `Faint) "(from: `%a`)" Fpath.pp p)
 
-let shim () =
+let shim ~from =
   let available_versions = Config.read () in
-  let version =
-    match get_required_version (Sys.getcwd ()) with
-    | Some (version, file) ->
-        (match String.Map.find_opt version available_versions with
+  let selected_binary =
+    match get_required_version from with
+    | None -> snd (String.Map.get_max_binding available_versions)
+    | Some (version, config_file) -> (
+        match String.Map.find_opt version available_versions with
+        | Some path -> path
         | None ->
             Logs.err (fun f ->
                 f "@[<hov>%a@]" Fmt.text
@@ -155,12 +126,11 @@ let shim () =
                       `%a`), but the binary `%a` isn't available.\n\n\
                       Either create this binary manually or install it in an \
                       opam switch and re-run `%a`."
-                     version cyan file cyan ("ocamlformat-" ^ version) cyan
-                     "ocamlformat-vmux steal"));
-            exit 1
-        | Some _ -> ());
-        version
-    | None -> fst (String.Map.get_max_binding available_versions)
+                     version
+                     Fmt.(styled `Cyan Fpath.pp)
+                     config_file cyan
+                     (versioned_ocamlformat version)
+                     cyan "ocamlformat-vmux steal"));
+            exit 1)
   in
-  let ocamlformat_binary = Printf.sprintf "ocamlformat-%s" version in
-  Unix.execvp ocamlformat_binary Sys.argv
+  Unix.execv (Fpath.to_string selected_binary) Sys.argv
