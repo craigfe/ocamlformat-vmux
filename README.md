@@ -1,5 +1,7 @@
 # OCamlformat version multiplexer
 
+<p align="center">🚧&nbsp;&nbsp;&nbsp;<b><i>Works on my machine™ but very poorly tested.</i></b>&nbsp;&nbsp;&nbsp;🚧</p>
+
 As of today, OCamlformat is normally consumed via installing the appropriate version into a dev switch. This is a bit painful, since the OCamlformat dependency tree is quite large and can conflict with other common dev switch inclusions (especially Odoc and Ppxlib).
 
 This project provides an awful hack to get around this problem: install all the versions, and provide a shim `ocamlformat` binary that proxies to the appropriate one at runtime. With this shim in your `$PATH`, you can stop installing OCamlformat in Opam switches :tada:
