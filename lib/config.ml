@@ -1,7 +1,7 @@
 open! Import
 
 let ( / ) = Filename.concat
-let parent_loc = Xdg.config_dir / "ocamlformat-tmux"
+let parent_loc = Xdg.config_dir / "ocamlformat-vmux"
 let location = parent_loc / "config"
 
 let read () =
