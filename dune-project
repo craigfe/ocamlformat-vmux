@@ -1,4 +1,5 @@
 (lang dune 2.0)
+(name ocamlformat-vmux)
 (generate_opam_files true)
 
 (source (github mirage/alcotest))
